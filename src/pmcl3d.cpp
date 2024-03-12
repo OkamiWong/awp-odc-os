@@ -22,15 +22,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <time.h>
 #include <unistd.h>
 
-const double micro = 1.0e-6;
+#include "kernel.h"
 
-void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt);
-void BindArrayToTexture(float* vx1, float* vx2, int memsize);
-void UnBindArrayFromTexture();
-void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nyt, int nzt, cudaStream_t St, int s_i, int e_i);
-void dvelcy_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nxt, int nzt, float* s_u1, float* s_v1, float* s_w1, cudaStream_t St, int s_j, int e_j, int rank);
-void dstrqc_H(float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, int nyt, int nzt, cudaStream_t St, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j, int e_j);
-void addsrc_H(int i, int READ_STEP, int dim, int* psrc, int npsrc, cudaStream_t St, float* axx, float* ayy, float* azz, float* axz, float* ayz, float* axy, float* xx, float* yy, float* zz, float* xy, float* yz, float* xz);
+const double micro = 1.0e-6;
 
 void calcRecordingPoints(int* rec_nbgx, int* rec_nedx, int* rec_nbgy, int* rec_nedy, int* rec_nbgz, int* rec_nedz, int* rec_nxt, int* rec_nyt, int* rec_nzt, MPI_Offset* displacement, long int nxt, long int nyt, long int nzt, int rec_NX, int rec_NY, int rec_NZ, int NBGX, int NEDX, int NSKPX, int NBGY, int NEDY, int NSKPY, int NBGZ, int NEDZ, int NSKPZ, int* coord);
 
