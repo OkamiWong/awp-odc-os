@@ -20,100 +20,90 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 ********************************************************************************
 */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
+
 #include "pmcl3d.h"
 
-Grid3D Alloc3D(int nx, int ny, int nz)
-{
-   int i, j, k;
-   Grid3D U = (Grid3D)malloc(sizeof(float**)*nx + sizeof(float *)*nx*ny +sizeof(float)*nx*ny*nz);
+Grid3D Alloc3D(int nx, int ny, int nz) {
+  int i, j, k;
+  Grid3D U = (Grid3D)malloc(sizeof(float **) * nx + sizeof(float *) * nx * ny + sizeof(float) * nx * ny * nz);
 
-   if (!U){
-       printf("Cannot allocate 3D float array\n");
-       exit(-1);
-   }
-   for(i=0;i<nx;i++){
-       U[i] = ((float**) U) + nx + i*ny;
-    }
+  if (!U) {
+    printf("Cannot allocate 3D float array\n");
+    exit(-1);
+  }
+  for (i = 0; i < nx; i++) {
+    U[i] = ((float **)U) + nx + i * ny;
+  }
 
-   float *Ustart = (float *) (U[nx-1] + ny);
-   for(i=0;i<nx;i++)
-       for(j=0;j<ny;j++)
-           U[i][j] = Ustart + i*ny*nz + j*nz;
+  float *Ustart = (float *)(U[nx - 1] + ny);
+  for (i = 0; i < nx; i++)
+    for (j = 0; j < ny; j++)
+      U[i][j] = Ustart + i * ny * nz + j * nz;
 
-   for(i=0;i<nx;i++)
-       for(j=0;j<ny;j++)
-           for(k=0;k<nz;k++)
-              U[i][j][k] = 0.0f;
+  for (i = 0; i < nx; i++)
+    for (j = 0; j < ny; j++)
+      for (k = 0; k < nz; k++)
+        U[i][j][k] = 0.0f;
 
-   return U;
+  return U;
 }
 
+Grid1D Alloc1D(int nx) {
+  int i;
+  Grid1D U = (Grid1D)malloc(sizeof(float) * nx);
 
-Grid1D Alloc1D(int nx)
-{
-   int i;
-   Grid1D U = (Grid1D)malloc(sizeof(float)*nx);
+  if (!U) {
+    printf("Cannot allocate 2D float array\n");
+    exit(-1);
+  }
 
-   if (!U){
-       printf("Cannot allocate 2D float array\n");
-       exit(-1);
-   }
+  for (i = 0; i < nx; i++)
+    U[i] = 0.0f;
 
-   for(i=0;i<nx;i++)
-       U[i] = 0.0f;
-
-   return U;
+  return U;
 }
 
+PosInf Alloc1P(int nx) {
+  int i;
+  PosInf U = (PosInf)malloc(sizeof(int) * nx);
 
-PosInf Alloc1P(int nx)
-{
-   int i;
-   PosInf U = (PosInf)malloc(sizeof(int)*nx);
+  if (!U) {
+    printf("Cannot allocate 2D integer array\n");
+    exit(-1);
+  }
 
-   if (!U){
-       printf("Cannot allocate 2D integer array\n");
-       exit(-1);
-   }
+  for (i = 0; i < nx; i++)
+    U[i] = 0;
 
-   for(i=0;i<nx;i++)
-       U[i] = 0;
-
-   return U;
+  return U;
 }
 
-void Delloc3D(Grid3D U)
-{
-   if (U)
-   {
-      free(U);
-      U = NULL;
-   }
+void Delloc3D(Grid3D U) {
+  if (U) {
+    free(U);
+    U = NULL;
+  }
 
-   return;
+  return;
 }
 
-void Delloc1D(Grid1D U)
-{
-   if (U)
-   {
-      free(U);
-      U = NULL;
-   }
+void Delloc1D(Grid1D U) {
+  if (U) {
+    free(U);
+    U = NULL;
+  }
 
-   return;
+  return;
 }
 
-void Delloc1P(PosInf U)
-{
-   if (U)
-   {
-      free(U);
-      U = NULL;
-   }
+void Delloc1P(PosInf U) {
+  if (U) {
+    free(U);
+    U = NULL;
+  }
 
-   return;
+  return;
 }
