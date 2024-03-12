@@ -1,3 +1,9 @@
+# IDE
+.vscode/
+
+# Example config
+awp-odc-os-v1.0-example/
+
 # Build artifacts
 *.o
 pmcl3d
