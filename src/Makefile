@@ -24,9 +24,9 @@
 # IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ##
 
-CUDA_HOME = $(subst bin/nvcc,,$(shell which nvcc))
+CUDA_HOME = /usr/local/cuda-11/
 
-CC 	= mpicxx
+CC 	= mpicc
 CFLAGS	= -O3 -g
 GFLAGS	= $(CUDA_HOME)bin/nvcc -use_fast_math -arch=sm_80
 
