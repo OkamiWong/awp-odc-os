@@ -35,7 +35,7 @@ __constant__ int d_yline_2;
 texture<float, 1, cudaReadModeElementType> p_vx1;
 texture<float, 1, cudaReadModeElementType> p_vx2;
 
-extern "C" void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
+void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
   float h_c1, h_c2, h_dth, h_dt1, h_dh1;
   int slice_1, slice_2, yline_1, yline_2;
   h_c1 = 9.0 / 8.0;
@@ -65,20 +65,20 @@ extern "C" void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nz
   return;
 }
 
-extern "C" void BindArrayToTexture(float* vx1, float* vx2, int memsize) {
+void BindArrayToTexture(float* vx1, float* vx2, int memsize) {
   cudaBindTexture(0, p_vx1, vx1, memsize);
   cudaBindTexture(0, p_vx2, vx2, memsize);
   cudaThreadSynchronize();
   return;
 }
 
-extern "C" void UnBindArrayFromTexture() {
+void UnBindArrayFromTexture() {
   cudaUnbindTexture(p_vx1);
   cudaUnbindTexture(p_vx2);
   return;
 }
 
-extern "C" void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nyt, int nzt, cudaStream_t St, int s_i, int e_i) {
+void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nyt, int nzt, cudaStream_t St, int s_i, int e_i) {
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nyt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dvelcx, cudaFuncCachePreferL1);
@@ -86,7 +86,7 @@ extern "C" void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, 
   return;
 }
 
-extern "C" void dvelcy_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nxt, int nzt, float* s_u1, float* s_v1, float* s_w1, cudaStream_t St, int s_j, int e_j, int rank) {
+void dvelcy_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nxt, int nzt, float* s_u1, float* s_v1, float* s_w1, cudaStream_t St, int s_j, int e_j, int rank) {
   if (rank == -1) return;
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nxt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
@@ -95,7 +95,7 @@ extern "C" void dvelcy_H(float* u1, float* v1, float* w1, float* xx, float* yy, 
   return;
 }
 
-extern "C" void update_bound_y_H(float* u1, float* v1, float* w1, float* f_u1, float* f_v1, float* f_w1, float* b_u1, float* b_v1, float* b_w1, int nxt, int nzt, cudaStream_t St1, cudaStream_t St2, int rank_f, int rank_b) {
+void update_bound_y_H(float* u1, float* v1, float* w1, float* f_u1, float* f_v1, float* f_w1, float* b_u1, float* b_v1, float* b_w1, int nxt, int nzt, cudaStream_t St1, cudaStream_t St2, int rank_f, int rank_b) {
   if (rank_f == -1 && rank_b == -1) return;
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nxt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
@@ -105,7 +105,7 @@ extern "C" void update_bound_y_H(float* u1, float* v1, float* w1, float* f_u1, f
   return;
 }
 
-extern "C" void dstrqc_H(float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, int nyt, int nzt, cudaStream_t St, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j, int e_j) {
+void dstrqc_H(float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, int nyt, int nzt, cudaStream_t St, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j, int e_j) {
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (e_j - s_j + 1 + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dstrqc, cudaFuncCachePreferL1);
@@ -113,7 +113,7 @@ extern "C" void dstrqc_H(float* xx, float* yy, float* zz, float* xy, float* xz, 
   return;
 }
 
-extern "C" void addsrc_H(int i, int READ_STEP, int dim, int* psrc, int npsrc, cudaStream_t St, float* axx, float* ayy, float* azz, float* axz, float* ayz, float* axy, float* xx, float* yy, float* zz, float* xy, float* yz, float* xz) {
+void addsrc_H(int i, int READ_STEP, int dim, int* psrc, int npsrc, cudaStream_t St, float* axx, float* ayy, float* azz, float* axz, float* ayz, float* axy, float* xx, float* yy, float* zz, float* xy, float* yz, float* xz) {
   dim3 grid, block;
   if (npsrc < 256) {
     block.x = npsrc;

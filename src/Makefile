@@ -26,7 +26,7 @@
 
 CUDA_HOME = /usr/local/cuda-11/
 
-CC 	= mpicc
+CC 	= mpicxx
 CFLAGS	= -O3 -g
 GFLAGS	= $(CUDA_HOME)bin/nvcc -use_fast_math -arch=sm_80
 
@@ -37,29 +37,29 @@ LIB	= -lm -ldl -L$(CUDA_HOME)lib64 -lcudart -lstdc++
 pmcl3d:	$(OBJECTS)
 	$(CC) $(CFLAGS) $(INCDIR) -o	pmcl3d	$(OBJECTS)	$(LIB)
 
-pmcl3d.o:	pmcl3d.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o pmcl3d.o	pmcl3d.c
+pmcl3d.o:	pmcl3d.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o pmcl3d.o	pmcl3d.cpp
 
-command.o:	command.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o	command.o	command.c
+command.o:	command.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o	command.o	command.cpp
 
-io.o:	  io.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o	io.o	  io.c
+io.o:	  io.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o	io.o	  io.cpp
 
-grid.o:		grid.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o grid.o		grid.c
+grid.o:		grid.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o grid.o		grid.cpp
 
-source.o:	source.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o source.o	source.c
+source.o:	source.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o source.o	source.cpp
 
-mesh.o:		mesh.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o mesh.o		mesh.c
+mesh.o:		mesh.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o mesh.o		mesh.cpp
 
-cerjan.o:	cerjan.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o cerjan.o	cerjan.c
+cerjan.o:	cerjan.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o cerjan.o	cerjan.cpp
 
-swap.o:		swap.c
-	$(CC) $(CFLAGS) $(INCDIR) -c -o swap.o		swap.c
+swap.o:		swap.cpp
+	$(CC) $(CFLAGS) $(INCDIR) -c -o swap.o		swap.cpp
 
 kernel.o:	kernel.cu
 	$(GFLAGS) $(INCDIR) -c -o	kernel.o	kernel.cu
