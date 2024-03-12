@@ -450,7 +450,11 @@ int main(int argc, char** argv) {
   cudaMemcpy(d_vx1, &vx1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
   cudaMalloc((void**)&d_vx2, num_bytes);
   cudaMemcpy(d_vx2, &vx2[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  BindArrayToTexture(d_vx1, d_vx2, num_bytes);
+
+  cudaTextureObject_t d_vx1_tex, d_vx2_tex;
+  Create1DFloatTextureObject(&d_vx1_tex, d_vx1, num_bytes);
+  Create1DFloatTextureObject(&d_vx2_tex, d_vx2, num_bytes);
+
   if (NPC == 0) {
     num_bytes = sizeof(float) * (nxt + 4 + 8 * loop);
     cudaMalloc((void**)&d_dcrjx, num_bytes);
@@ -589,7 +593,7 @@ int main(int argc, char** argv) {
       MPI_Waitall(count_x, request_x, status_x);
       Cpy2Device_VX(d_u1, d_v1, d_w1, RL_vel, RR_vel, nxt, nyt, nzt, stream_i, stream_i, x_rank_L, x_rank_R);
       // stress computation whole 3D Grid (nxt+4, nyt+4, nzt)
-      dstrqc_H(d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_r1, d_r2, d_r3, d_r4, d_r5, d_r6, d_u1, d_v1, d_w1, d_lam, d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt, nzt, stream_i, d_lam_mu, NX, coord[0], coord[1], xls, xre, yls, yre);
+      dstrqc_H(d_vx1_tex, d_vx2_tex, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_r1, d_r2, d_r3, d_r4, d_r5, d_r6, d_u1, d_v1, d_w1, d_lam, d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt, nzt, stream_i, d_lam_mu, NX, coord[0], coord[1], xls, xre, yls, yre);
       // update source input
       if (rank == srcproc && cur_step < NST) {
         ++source_step;
@@ -605,16 +609,10 @@ int main(int argc, char** argv) {
         idtmp = ((cur_step / NTISKP + WRITE_STEP - 1) % WRITE_STEP);
         idtmp = idtmp * rec_nxt * rec_nyt * rec_nzt;
         tmpInd = idtmp;
-        // if(rank==0) printf("idtmp=%ld\n", idtmp);
-        //  surface: k=nzt+align-1;
+
         for (k = nzt + align - 1 - rec_nbgz; k >= nzt + align - 1 - rec_nedz; k = k - NSKPZ)
           for (j = 2 + 4 * loop + rec_nbgy; j <= 2 + 4 * loop + rec_nedy; j = j + NSKPY)
             for (i = 2 + 4 * loop + rec_nbgx; i <= 2 + 4 * loop + rec_nedx; i = i + NSKPX) {
-              // idx = (i-2-4*loop)/NSKPX;
-              // idy = (j-2-4*loop)/NSKPY;
-              // idz = ((nzt+align-1) - k)/NSKPZ;
-              // tmpInd = idtmp + idz*rec_nxt*rec_nyt + idy*rec_nxt + idx;
-              // if(rank==0) printf("%ld:%d,%d,%d\t",tmpInd,i,j,k);
               Bufx[tmpInd] = u1[i][j][k];
               Bufy[tmpInd] = v1[i][j][k];
               Bufz[tmpInd] = w1[i][j][k];
@@ -638,8 +636,7 @@ int main(int argc, char** argv) {
           err = MPI_File_write_all(fh, Bufz, rec_nxt * rec_nyt * rec_nzt * WRITE_STEP, MPI_FLOAT, &filestatus);
           err = MPI_File_close(&fh);
         }
-        // else
-        // cudaThreadSynchronize();
+
         // write-statistics to chk file:
         if (rank == 0) {
           i = ND + 2 + 4 * loop;
@@ -649,8 +646,6 @@ int main(int argc, char** argv) {
           fflush(fchk);
         }
       }
-      // else
-      // cudaThreadSynchronize();
 
       if ((cur_step < NST - 1) && (IFAULT == 2) && ((cur_step + 1) % READ_STEP_GPU == 0) && (rank == srcproc)) {
         printf("%d) Read new source from CPU.\n", rank);
@@ -662,118 +657,8 @@ int main(int argc, char** argv) {
         // Synchronous copy!
         Cpy2Device_source(npsrc, READ_STEP_GPU, ((cur_step + 1) % READ_STEP), taxx, tayy, tazz, taxz, tayz, taxy, d_taxx, d_tayy, d_tazz, d_taxz, d_tayz, d_taxy);
         source_step = 0;
-      } /*
-       if((cur_step<NST) && (cur_step%25==0) && (rank==srcproc)){
-         printf("%d) SOURCE: taxx,xy,xz:%e,%e,%e\n",rank,
-             taxx[cur_step],taxy[cur_step],taxz[cur_step]);
-       }*/
+      }
     }
-    // This loop is purly stencil computation, overlapping are utilized here
-    // time_un  -= gethrtime();
-    /*
-           for(cur_step=cur_step;cur_step<=nt;cur_step++)
-           {
-             if(rank==0) printf("Time Step =                   %ld    OF  Total Timesteps = %ld\n", cur_step, nt);
-             //pre-post MPI Message
-             PostRecvMsg_Y(RF_vel, RB_vel, MCW, request_y, &count_y, msg_v_size_y, y_rank_F, y_rank_B);
-             PostRecvMsg_X(RL_vel, RR_vel, MCW, request_x, &count_x, msg_v_size_x, x_rank_L, x_rank_R);
-             //velocity computation in y boundary, two ghost cell region, two different streams to control
-             dvelcy_H(d_u1, d_v1, d_w1, d_xx,   d_yy,   d_zz,   d_xy,       d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz,
-                      d_d1, nxt,  nzt,  d_f_u1, d_f_v1, d_f_w1, stream_1,   yfs,  yfe,  y_rank_F);
-             Cpy2Host_VY(d_f_u1, d_f_v1, d_f_w1,  SF_vel, nxt, nzt, stream_1, y_rank_F);
-             dvelcy_H(d_u1, d_v1, d_w1, d_xx,   d_yy,   d_zz,   d_xy,       d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz,
-                      d_d1, nxt,  nzt,  d_b_u1, d_b_v1, d_b_w1, stream_2,   ybs,  ybe,  y_rank_B);
-             Cpy2Host_VY(d_b_u1, d_b_v1, d_b_w1,  SB_vel, nxt, nzt, stream_2, y_rank_B);
-             //Memory copy from GPU to CPU, and velocity computation at the same time
-             dvelcx_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz,
-                      d_d1, nyt,  nzt,  stream_i,   xvs,  xve);
-             //MPI overlapping velocity computation
-             cudaStreamSynchronize(stream_1);
-             PostSendMsg_Y(SF_vel, SB_vel, MCW, request_y, &count_y, msg_v_size_y, y_rank_F, y_rank_B, rank, Front);
-             cudaStreamSynchronize(stream_2);
-             PostSendMsg_Y(SF_vel, SB_vel, MCW, request_y, &count_y, msg_v_size_y, y_rank_F, y_rank_B, rank, Back);
-             MPI_Waitall(count_y, request_y, status_y);
-             Cpy2Device_VY(d_u1,     d_v1,     d_w1,     d_f_u1, d_f_v1, d_f_w1, d_b_u1, d_b_v1, d_b_w1, RF_vel, RB_vel, nxt, nyt, nzt,
-                           stream_1, stream_2, y_rank_F, y_rank_B);
-             cudaThreadSynchronize();
-             //start stress computation in insider part
-             dstrqc_H(d_xx, d_yy, d_zz, d_xy,    d_xz,    d_yz,    d_r1, d_r2, d_r3,     d_r4,     d_r5, d_r6,     d_u1, d_v1, d_w1, d_lam,
-                      d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt,  nzt,  stream_i, d_lam_mu, NX,   coord[0], coord[1],   xss2, xse2,
-                      yls,  yre);
-             Cpy2Host_VX(d_u1, d_v1, d_w1, SL_vel, nxt, nyt, nzt, stream_1, x_rank_L, Left);
-             Cpy2Host_VX(d_u1, d_v1, d_w1, SR_vel, nxt, nyt, nzt, stream_2, x_rank_R, Right);
-             //MPI overlapping stress computation
-             cudaStreamSynchronize(stream_1);
-             PostSendMsg_X(SL_vel, SR_vel, MCW, request_x, &count_x, msg_v_size_x, x_rank_L, x_rank_R, rank, Left);
-             cudaStreamSynchronize(stream_2);
-             PostSendMsg_X(SL_vel, SR_vel, MCW, request_x, &count_x, msg_v_size_x, x_rank_L, x_rank_R, rank, Right);
-             MPI_Waitall(count_x, request_x, status_x);
-             Cpy2Device_VX(d_u1, d_v1, d_w1, RL_vel, RR_vel, nxt, nyt, nzt, stream_1, stream_2, x_rank_L, x_rank_R);
-       //stress computation in ghost cells
-             dstrqc_H(d_xx, d_yy, d_zz, d_xy,    d_xz,    d_yz,    d_r1, d_r2, d_r3,     d_r4,     d_r5, d_r6,     d_u1, d_v1, d_w1, d_lam,
-                      d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt,  nzt,  stream_1, d_lam_mu, NX,   coord[0], coord[1],   xss1, xse1,
-          yls,  yre);
-             dstrqc_H(d_xx, d_yy, d_zz, d_xy,    d_xz,    d_yz,    d_r1, d_r2, d_r3,     d_r4,     d_r5, d_r6,     d_u1, d_v1, d_w1, d_lam,
-                      d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt,  nzt,  stream_2, d_lam_mu, NX,   coord[0], coord[1],   xss3, xse3,
-                      yls,  yre);
-             //cudaThreadSynchronize();
-
-             if(cur_step%NTISKP == 0){
-              num_bytes = sizeof(float)*(nxt+4+8*loop)*(nyt+4+8*loop)*(nzt+2*align);
-              cudaMemcpy(&u1[0][0][0],d_u1,num_bytes,cudaMemcpyDeviceToHost);
-              cudaMemcpy(&v1[0][0][0],d_v1,num_bytes,cudaMemcpyDeviceToHost);
-              cudaMemcpy(&w1[0][0][0],d_w1,num_bytes,cudaMemcpyDeviceToHost);
-              idtmp = ((cur_step/NTISKP+WRITE_STEP-1)%WRITE_STEP);
-              idtmp = idtmp*rec_nxt*rec_nyt*rec_nzt;
-              tmpInd = idtmp;
-              // surface: k=nzt+align-1;
-              for(k=nzt+align-1 - rec_nbgz; k>=nzt+align-1 - rec_nedz; k=k-NSKPZ)
-                for(j=2+4*loop + rec_nbgy; j<=2+4*loop + rec_nedy; j=j+NSKPY)
-                  for(i=2+4*loop + rec_nbgx; i<=2+4*loop + rec_nedx; i=i+NSKPX)
-                  {
-                    //idx = (i-2-4*loop)/NSKPX;
-                    //idy = (j-2-4*loop)/NSKPY;
-                    //idz = ((nzt+align-1) - k)/NSKPZ;
-                    //tmpInd = idtmp + idz*rec_nxt*rec_nyt + idy*rec_nxt + idx;
-                    Bufx[tmpInd] = u1[i][j][k];
-                    Bufy[tmpInd] = v1[i][j][k];
-                    Bufz[tmpInd] = w1[i][j][k];
-                    tmpInd++;
-                  }
-              if((cur_step/NTISKP)%WRITE_STEP == 0){
-                cudaThreadSynchronize();
-                //printf("I'm %d, my disp=%ld\n", rank, displacement);
-                sprintf(filename, "%s%07ld", filenamebasex, cur_step);
-                err = MPI_File_open(MCW,filename,MPI_MODE_CREATE|MPI_MODE_WRONLY,MPI_INFO_NULL,&fh);
-                err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-                err = MPI_File_write_all(fh, Bufx, rec_nxt*rec_nyt*rec_nzt*WRITE_STEP, MPI_FLOAT, &filestatus);
-                err = MPI_File_close(&fh);
-                sprintf(filename, "%s%07ld", filenamebasey, cur_step);
-                err = MPI_File_open(MCW,filename,MPI_MODE_CREATE|MPI_MODE_WRONLY,MPI_INFO_NULL,&fh);
-                err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-                err = MPI_File_write_all(fh, Bufy, rec_nxt*rec_nyt*rec_nzt*WRITE_STEP, MPI_FLOAT, &filestatus);
-                err = MPI_File_close(&fh);
-                sprintf(filename, "%s%07ld", filenamebasez, cur_step);
-                err = MPI_File_open(MCW,filename,MPI_MODE_CREATE|MPI_MODE_WRONLY,MPI_INFO_NULL,&fh);
-                err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-                err = MPI_File_write_all(fh, Bufz, rec_nxt*rec_nyt*rec_nzt*WRITE_STEP, MPI_FLOAT, &filestatus);
-                err = MPI_File_close(&fh);
-              }
-              else
-                cudaThreadSynchronize();
-              if(rank==0){
-                i = ND+2+4*loop;
-                j = i;
-                k = nzt+align-1-ND;
-                fprintf(fchk,"%ld :\t%e\t%e\t%e\n",cur_step,u1[i][j][k],v1[i][j][k],w1[i][j][k]);
-                fflush(fchk);
-              }
-             }
-             else
-               cudaThreadSynchronize();
-
-           }
-    */
     time_un += gethrtime();
   }
   if (rank == 0) {
@@ -805,7 +690,8 @@ int main(int argc, char** argv) {
   //  Main Loop Ends
 
   //  program ends, free all memories
-  UnBindArrayFromTexture();
+  cudaDestroyTextureObject(d_vx1_tex);
+  cudaDestroyTextureObject(d_vx2_tex);
   Delloc3D(u1);
   Delloc3D(v1);
   Delloc3D(w1);

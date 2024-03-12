@@ -12,7 +12,8 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <stdio.h>
+#include <cstdio>
+#include <cstring>
 
 #include "kernel.h"
 #include "pmcl3d_cons.h"
@@ -32,8 +33,21 @@ __constant__ int d_slice_2;
 __constant__ int d_yline_1;
 __constant__ int d_yline_2;
 
-texture<float, 1, cudaReadModeElementType> p_vx1;
-texture<float, 1, cudaReadModeElementType> p_vx2;
+void Create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffer, size_t size) {
+  cudaResourceDesc resDesc;
+  memset(&resDesc, 0, sizeof(resDesc));
+  resDesc.resType = cudaResourceTypeLinear;
+  resDesc.res.linear.devPtr = buffer;
+  resDesc.res.linear.desc.f = cudaChannelFormatKindFloat;
+  resDesc.res.linear.desc.x = 32;
+  resDesc.res.linear.sizeInBytes = size;
+
+  cudaTextureDesc texDesc;
+  memset(&texDesc, 0, sizeof(texDesc));
+  texDesc.readMode = cudaReadModeElementType;
+
+  cudaCreateTextureObject(textureObject, &resDesc, &texDesc, nullptr);
+}
 
 void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
   float h_c1, h_c2, h_dth, h_dt1, h_dh1;
@@ -65,19 +79,6 @@ void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
   return;
 }
 
-void BindArrayToTexture(float* vx1, float* vx2, int memsize) {
-  cudaBindTexture(0, p_vx1, vx1, memsize);
-  cudaBindTexture(0, p_vx2, vx2, memsize);
-  cudaThreadSynchronize();
-  return;
-}
-
-void UnBindArrayFromTexture() {
-  cudaUnbindTexture(p_vx1);
-  cudaUnbindTexture(p_vx2);
-  return;
-}
-
 void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nyt, int nzt, cudaStream_t St, int s_i, int e_i) {
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nyt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
@@ -105,11 +106,11 @@ void update_bound_y_H(float* u1, float* v1, float* w1, float* f_u1, float* f_v1,
   return;
 }
 
-void dstrqc_H(float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, int nyt, int nzt, cudaStream_t St, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j, int e_j) {
+void dstrqc_H(cudaTextureObject_t vx1_tex, cudaTextureObject_t vx2_tex, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, int nyt, int nzt, cudaStream_t St, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j, int e_j) {
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (e_j - s_j + 1 + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dstrqc, cudaFuncCachePreferL1);
-  dstrqc<<<grid, block, 0, St>>>(xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, u1, v1, w1, lam, mu, qp, qs, dcrjx, dcrjy, dcrjz, lam_mu, NX, rankx, ranky, s_i, e_i, s_j);
+  dstrqc<<<grid, block, 0, St>>>(vx1_tex, vx2_tex, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, u1, v1, w1, lam, mu, qp, qs, dcrjx, dcrjy, dcrjz, lam_mu, NX, rankx, ranky, s_i, e_i, s_j);
   return;
 }
 
@@ -315,7 +316,7 @@ __global__ void update_boundary_y(float* u1, float* v1, float* w1, float* s_u1, 
   return;
 }
 
-__global__ void dstrqc(float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j) {
+__global__ void dstrqc(cudaTextureObject_t vx1_tex, cudaTextureObject_t vx2_tex, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* r1, float* r2, float* r3, float* r4, float* r5, float* r6, float* u1, float* v1, float* w1, float* lam, float* mu, float* qp, float* qs, float* dcrjx, float* dcrjy, float* dcrjz, float* lam_mu, int NX, int rankx, int ranky, int s_i, int e_i, int s_j) {
   register int i, j, k, g_i;
   register int pos, pos_ip1, pos_im2, pos_im1;
   register int pos_km2, pos_km1, pos_kp1, pos_kp2;
@@ -346,8 +347,8 @@ __global__ void dstrqc(float* xx, float* yy, float* zz, float* xy, float* xz, fl
   f_dcrjz = dcrjz[k];
   f_dcrjy = dcrjy[j];
   for (i = e_i; i >= s_i; i--) {
-    f_vx1 = tex1Dfetch(p_vx1, pos);
-    f_vx2 = tex1Dfetch(p_vx2, pos);
+    f_vx1 = tex1Dfetch<float>(vx1_tex, pos);
+    f_vx2 = tex1Dfetch<float>(vx2_tex, pos);
     f_dcrj = dcrjx[i] * f_dcrjy * f_dcrjz;
 
     pos_km2 = pos - 2;
