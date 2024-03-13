@@ -33,7 +33,7 @@ __constant__ int d_slice_2;
 __constant__ int d_yline_1;
 __constant__ int d_yline_2;
 
-void Create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffer, size_t size) {
+void create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffer, size_t size) {
   cudaResourceDesc resDesc;
   memset(&resDesc, 0, sizeof(resDesc));
   resDesc.resType = cudaResourceTypeLinear;
@@ -49,7 +49,7 @@ void Create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffe
   cudaCreateTextureObject(textureObject, &resDesc, &texDesc, nullptr);
 }
 
-void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
+void setDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt) {
   float h_c1, h_c2, h_dth, h_dt1, h_dh1;
   int slice_1, slice_2, yline_1, yline_2;
   h_c1 = 9.0 / 8.0;

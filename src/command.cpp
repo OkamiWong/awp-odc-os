@@ -125,7 +125,7 @@ const char def_INSRC_I2[50] = "input_rst/srcpart/split_faults/fault";
 
 const char def_CHKFILE[50] = "output_ckp/CHKP";
 
-void command(int argc, char **argv, float *TMAX, float *DH, float *DT, float *ARBC, float *PHT, int *NPC, int *ND, int *NSRC, int *NST, int *NVAR, int *NVE, int *MEDIASTART, int *IFAULT, int *READ_STEP, int *READ_STEP_GPU, int *NTISKP, int *WRITE_STEP, int *NX, int *NY, int *NZ, int *PX, int *PY, int *NBGX, int *NEDX, int *NSKPX, int *NBGY, int *NEDY, int *NSKPY, int *NBGZ, int *NEDZ, int *NSKPZ, float *FL, float *FH, float *FP, int *IDYNA, int *SoCalQ, char *INSRC, char *INVEL, char *OUT, char *INSRC_I2, char *CHKFILE) {
+void parseArguments(int argc, char **argv, float *TMAX, float *DH, float *DT, float *ARBC, float *PHT, int *NPC, int *ND, int *NSRC, int *NST, int *NVAR, int *NVE, int *MEDIASTART, int *IFAULT, int *READ_STEP, int *READ_STEP_GPU, int *NTISKP, int *WRITE_STEP, int *NX, int *NY, int *NZ, int *PX, int *PY, int *NBGX, int *NEDX, int *NSKPX, int *NBGY, int *NEDY, int *NSKPY, int *NBGZ, int *NEDZ, int *NSKPZ, float *FL, float *FH, float *FP, int *IDYNA, int *SoCalQ, char *INSRC, char *INVEL, char *OUT, char *INSRC_I2, char *CHKFILE) {
   // Fill in default values
   *TMAX = def_TMAX;
   *DH = def_DH;

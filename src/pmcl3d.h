@@ -38,15 +38,15 @@ typedef float *RESTRICT *RESTRICT *RESTRICT Grid3D;
 typedef float *RESTRICT Grid1D;
 typedef int *RESTRICT PosInf;
 
-void command(int argc, char **argv, float *TMAX, float *DH, float *DT, float *ARBC, float *PHT, int *NPC, int *ND, int *NSRC, int *NST, int *NVAR, int *NVE, int *MEDIASTART, int *IFAULT, int *READ_STEP, int *READ_STEP_GPU, int *NTISKP, int *WRITE_STEP, int *NX, int *NY, int *NZ, int *PX, int *PY, int *NBGX, int *NEDX, int *NSKPX, int *NBGY, int *NEDY, int *NSKPY, int *NBGZ, int *NEDZ, int *NSKPZ, float *FL, float *FH, float *FP, int *IDYNA, int *SoCalQ, char *INSRC, char *INVEL, char *OUT, char *INSRC_I2, char *CHKFILE);
+void parseArguments(int argc, char **argv, float *TMAX, float *DH, float *DT, float *ARBC, float *PHT, int *NPC, int *ND, int *NSRC, int *NST, int *NVAR, int *NVE, int *MEDIASTART, int *IFAULT, int *READ_STEP, int *READ_STEP_GPU, int *NTISKP, int *WRITE_STEP, int *NX, int *NY, int *NZ, int *PX, int *PY, int *NBGX, int *NEDX, int *NSKPX, int *NBGY, int *NEDY, int *NSKPY, int *NBGZ, int *NEDZ, int *NSKPZ, float *FL, float *FH, float *FP, int *IDYNA, int *SoCalQ, char *INSRC, char *INVEL, char *OUT, char *INSRC_I2, char *CHKFILE);
 
 int read_src_ifault_2(int rank, int READ_STEP, char *INSRC, char *INSRC_I2, int maxdim, int *coords, int NZ, int nxt, int nyt, int nzt, int *NPSRC, int *SRCPROC, PosInf *psrc, Grid1D *axx, Grid1D *ayy, Grid1D *azz, Grid1D *axz, Grid1D *ayz, Grid1D *axy, int idx);
 
-int inisource(int rank, int IFAULT, int NSRC, int READ_STEP, int NST, int *SRCPROC, int NZ, MPI_Comm MCW, int nxt, int nyt, int nzt, int *coords, int maxdim, int *NPSRC, PosInf *ptpsrc, Grid1D *ptaxx, Grid1D *ptayy, Grid1D *ptazz, Grid1D *ptaxz, Grid1D *ptayz, Grid1D *ptaxy, char *INSRC, char *INSRC_I2);
+int initializeSource(int rank, int IFAULT, int NSRC, int READ_STEP, int NST, int *SRCPROC, int NZ, MPI_Comm MCW, int nxt, int nyt, int nzt, int *coords, int maxdim, int *NPSRC, PosInf *ptpsrc, Grid1D *ptaxx, Grid1D *ptayy, Grid1D *ptazz, Grid1D *ptaxz, Grid1D *ptayz, Grid1D *ptaxy, char *INSRC, char *INSRC_I2);
 
 void addsrc(int i, float DH, float DT, int NST, int npsrc, int READ_STEP, int dim, PosInf psrc, Grid1D axx, Grid1D ayy, Grid1D azz, Grid1D axz, Grid1D ayz, Grid1D axy, Grid3D xx, Grid3D yy, Grid3D zz, Grid3D xy, Grid3D yz, Grid3D xz);
 
-void inimesh(int MEDIASTART, Grid3D d1, Grid3D mu, Grid3D lam, Grid3D qp, Grid3D qs, float *taumax, float *taumin, int nvar, float FP, float FL, float FH, int nxt, int nyt, int nzt, int PX, int PY, int NX, int NY, int NZ, int *coords, MPI_Comm MCW, int IDYNA, int NVE, int SoCalQ, char *INVEL, float *vse, float *vpe, float *dde);
+void initializeMesh(int MEDIASTART, Grid3D d1, Grid3D mu, Grid3D lam, Grid3D qp, Grid3D qs, float *taumax, float *taumin, int nvar, float FP, float FL, float FH, int nxt, int nyt, int nzt, int PX, int PY, int NX, int NY, int NZ, int *coords, MPI_Comm MCW, int IDYNA, int NVE, int SoCalQ, char *INVEL, float *vse, float *vpe, float *dde);
 
 int writeCHK(char *chkfile, int ntiskp, float dt, float dh, int nxt, int nyt, int nzt, int nt, float arbc, int npc, int nve, float fl, float fh, float fp, float *vse, float *vpe, float *dde);
 

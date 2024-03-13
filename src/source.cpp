@@ -123,7 +123,7 @@ int read_src_ifault_2(int rank, int READ_STEP, char *INSRC, char *INSRC_I2, int 
   return 0;
 }
 
-int inisource(int rank, int IFAULT, int NSRC, int READ_STEP, int NST, int *SRCPROC, int NZ, MPI_Comm MCW, int nxt, int nyt, int nzt, int *coords, int maxdim, int *NPSRC, PosInf *ptpsrc, Grid1D *ptaxx, Grid1D *ptayy, Grid1D *ptazz, Grid1D *ptaxz, Grid1D *ptayz, Grid1D *ptaxy, char *INSRC, char *INSRC_I2) {
+int initializeSource(int rank, int IFAULT, int NSRC, int READ_STEP, int NST, int *SRCPROC, int NZ, MPI_Comm MCW, int nxt, int nyt, int nzt, int *coords, int maxdim, int *NPSRC, PosInf *ptpsrc, Grid1D *ptaxx, Grid1D *ptayy, Grid1D *ptazz, Grid1D *ptaxz, Grid1D *ptayz, Grid1D *ptaxy, char *INSRC, char *INSRC_I2) {
   int i, j, k, npsrc, srcproc, master = 0;
   int nbx, nex, nby, ney, nbz, nez;
   PosInf tpsrc = NULL, tpsrcp = NULL;

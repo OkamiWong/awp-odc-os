@@ -15,9 +15,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #ifndef _KERNEL_H
 #define _KERNEL_H
 
-void Create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffer, size_t size);
+void create1DFloatTextureObject(cudaTextureObject_t* textureObject, float* buffer, size_t size);
 
-void SetDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt);
+void setDeviceConstValue(float DH, float DT, int nxt, int nyt, int nzt);
 
 void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, float* xy, float* xz, float* yz, float* dcrjx, float* dcrjy, float* dcrjz, float* d_1, int nyt, int nzt, cudaStream_t St, int s_i, int e_i);
 

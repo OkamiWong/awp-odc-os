@@ -24,9 +24,65 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include "kernel.h"
 
-const double micro = 1.0e-6;
+constexpr double MICRO_SECOND = 1.0e-6;
 
-void calcRecordingPoints(int* rec_nbgx, int* rec_nedx, int* rec_nbgy, int* rec_nedy, int* rec_nbgz, int* rec_nedz, int* rec_nxt, int* rec_nyt, int* rec_nzt, MPI_Offset* displacement, long int nxt, long int nyt, long int nzt, int rec_NX, int rec_NY, int rec_NZ, int NBGX, int NEDX, int NSKPX, int NBGY, int NEDY, int NSKPY, int NBGZ, int NEDZ, int NSKPZ, int* coord);
+// Calculates recording points for each core
+// rec_nbgxyz rec_nedxyz...
+// WARNING: Assumes NPZ = 1! Only surface outputs are needed!
+void calcRecordingPoints(int* rec_nbgx, int* rec_nedx, int* rec_nbgy, int* rec_nedy, int* rec_nbgz, int* rec_nedz, int* rec_nxt, int* rec_nyt, int* rec_nzt, MPI_Offset* displacement, long int nxt, long int nyt, long int nzt, int rec_NX, int rec_NY, int rec_NZ, int NBGX, int NEDX, int NSKPX, int NBGY, int NEDY, int NSKPY, int NBGZ, int NEDZ, int NSKPZ, int* coord) {
+  *displacement = 0;
+
+  if (NBGX > nxt * (coord[0] + 1))
+    *rec_nxt = 0;
+  else if (NEDX < nxt * coord[0] + 1)
+    *rec_nxt = 0;
+  else {
+    if (nxt * coord[0] >= NBGX) {
+      *rec_nbgx = (nxt * coord[0] + NBGX - 1) % NSKPX;
+      *displacement += (nxt * coord[0] - NBGX) / NSKPX + 1;
+    } else
+      *rec_nbgx = NBGX - nxt * coord[0] - 1;  // since rec_nbgx is 0-based
+    if (nxt * (coord[0] + 1) <= NEDX)
+      *rec_nedx = (nxt * (coord[0] + 1) + NBGX - 1) % NSKPX - NSKPX + nxt;
+    else
+      *rec_nedx = NEDX - nxt * coord[0] - 1;
+    *rec_nxt = (*rec_nedx - *rec_nbgx) / NSKPX + 1;
+  }
+
+  if (NBGY > nyt * (coord[1] + 1))
+    *rec_nyt = 0;
+  else if (NEDY < nyt * coord[1] + 1)
+    *rec_nyt = 0;
+  else {
+    if (nyt * coord[1] >= NBGY) {
+      *rec_nbgy = (nyt * coord[1] + NBGY - 1) % NSKPY;
+      *displacement += ((nyt * coord[1] - NBGY) / NSKPY + 1) * rec_NX;
+    } else
+      *rec_nbgy = NBGY - nyt * coord[1] - 1;  // since rec_nbgy is 0-based
+    if (nyt * (coord[1] + 1) <= NEDY)
+      *rec_nedy = (nyt * (coord[1] + 1) + NBGY - 1) % NSKPY - NSKPY + nyt;
+    else
+      *rec_nedy = NEDY - nyt * coord[1] - 1;
+    *rec_nyt = (*rec_nedy - *rec_nbgy) / NSKPY + 1;
+  }
+
+  if (NBGZ > nzt)
+    *rec_nzt = 0;
+  else {
+    *rec_nbgz = NBGZ - 1;  // since rec_nbgz is 0-based
+    *rec_nedz = NEDZ - 1;
+    *rec_nzt = (*rec_nedz - *rec_nbgz) / NSKPZ + 1;
+  }
+
+  if (*rec_nxt == 0 || *rec_nyt == 0 || *rec_nzt == 0) {
+    *rec_nxt = 0;
+    *rec_nyt = 0;
+    *rec_nzt = 0;
+  }
+
+  // displacement assumes NPZ=1!
+  *displacement *= sizeof(float);
+}
 
 double gethrtime() {
   struct timeval TV;
@@ -37,11 +93,10 @@ double gethrtime() {
     return (-1);
   }
 
-  return (((double)TV.tv_sec) + micro * ((double)TV.tv_usec));
+  return (((double)TV.tv_sec) + MICRO_SECOND * ((double)TV.tv_usec));
 }
 
 int main(int argc, char** argv) {
-  //  variable definition begins
   float TMAX, DH, DT, ARBC, PHT;
   int NPC, ND, NSRC, NST;
   int NVE, NVAR, MEDIASTART, IFAULT, READ_STEP, READ_STEP_GPU;
@@ -51,8 +106,7 @@ int main(int argc, char** argv) {
   MPI_Offset displacement;
   float FL, FH, FP;
   char INSRC[50], INVEL[50], OUT[50], INSRC_I2[50], CHKFILE[50];
-  double GFLOPS = 1.0;
-  double GFLOPS_SUM = 0.0;
+
   Grid3D u1 = NULL, v1 = NULL, w1 = NULL;
   Grid3D d1 = NULL, mu = NULL, lam = NULL;
   Grid3D xx = NULL, yy = NULL, zz = NULL, xy = NULL, yz = NULL, xz = NULL;
@@ -66,7 +120,8 @@ int main(int argc, char** argv) {
   Grid1D dcrjx = NULL, dcrjy = NULL, dcrjz = NULL;
   float vse[2], vpe[2], dde[2];
   FILE* fchk;
-  //  GPU variables
+
+  // GPU variables
   long int num_bytes;
   float* d_d1;
   float* d_u1;
@@ -107,7 +162,7 @@ int main(int argc, char** argv) {
   float* d_taxz;
   float* d_tayz;
   float* d_taxy;
-  //  end of GPU variables
+
   int i, j, k, idx, idy, idz;
   long int idtmp;
   long int tmpInd;
@@ -117,12 +172,12 @@ int main(int argc, char** argv) {
   int npsrc;
   long int nt, cur_step, source_step;
   double time_un = 0.0;
-  //  MPI+CUDA variables
+
+  // MPI + CUDA variables
   cudaError_t cerr;
   cudaStream_t stream_1, stream_2, stream_i;
   int rank, size, err, srcproc, rank_gpu;
   int dim[2], period[2], coord[2], reorder;
-  // int   fmtype[3], fptype[3], foffset[3];
   int x_rank_L = -1, x_rank_R = -1, y_rank_F = -1, y_rank_B = -1;
   MPI_Comm MCW, MC1;
   MPI_Request request_x[4], request_y[4];
@@ -140,7 +195,6 @@ int main(int argc, char** argv) {
   float* SB_vel;  // Velocity to be Sent to   Back  in y direction (u1,v1,w1)
   float* RF_vel;  // Velocity to be Recv from Front in y direction (u1,v1,w1)
   float* RB_vel;  // Velocity to be Recv from Back  in y direction (u1,v1,w1)
-                  //  variable definition ends
 
   int tmpSize;
   int WRITE_STEP;
@@ -163,35 +217,19 @@ int main(int argc, char** argv) {
   char filenamebasez[50];
 
   //  variable initialization begins
-  command(argc, argv, &TMAX, &DH, &DT, &ARBC, &PHT, &NPC, &ND, &NSRC, &NST, &NVAR, &NVE, &MEDIASTART, &IFAULT, &READ_STEP, &READ_STEP_GPU, &NTISKP, &WRITE_STEP, &NX, &NY, &NZ, &PX, &PY, &NBGX, &NEDX, &NSKPX, &NBGY, &NEDY, &NSKPY, &NBGZ, &NEDZ, &NSKPZ, &FL, &FH, &FP, &IDYNA, &SoCalQ, INSRC, INVEL, OUT, INSRC_I2, CHKFILE);
+  parseArguments(argc, argv, &TMAX, &DH, &DT, &ARBC, &PHT, &NPC, &ND, &NSRC, &NST, &NVAR, &NVE, &MEDIASTART, &IFAULT, &READ_STEP, &READ_STEP_GPU, &NTISKP, &WRITE_STEP, &NX, &NY, &NZ, &PX, &PY, &NBGX, &NEDX, &NSKPX, &NBGY, &NEDY, &NSKPY, &NBGZ, &NEDZ, &NSKPZ, &FL, &FH, &FP, &IDYNA, &SoCalQ, INSRC, INVEL, OUT, INSRC_I2, CHKFILE);
 
   sprintf(filenamebasex, "%s/SX", OUT);
   sprintf(filenamebasey, "%s/SY", OUT);
   sprintf(filenamebasez, "%s/SZ", OUT);
 
-  // printf("After command.\n");
-  //  Below 12 lines are NOT for HPGPU4 machine!
-  /*    int local_rank;
-      char* str;
-      if ((str = getenv("MV2_COMM_WORLD_LOCAL_RANK")) != NULL) {
-        local_rank = atoi(str);
-        rank_gpu = local_rank%3;
-      }
-      else{
-        printf("CANNOT READ LOCAL RANK!\n");
-        MPI_Abort(MPI_COMM_WORLD, -1);
-      }
-      //printf("%d) After rank_gpu calc.\n",local_rank);
-      cudaSetDevice(rank_gpu);
-      //if(local_rank==0) printf("after cudaSetDevice\n");
-  */
-  // WARNING: Above 12 lines are not for HPGPU4 machine!
-
+  // TODO: Remove
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   MPI_Comm_dup(MPI_COMM_WORLD, &MCW);
   MPI_Barrier(MCW);
+
   nxt = NX / PX;
   nyt = NY / PY;
   nzt = NZ;
@@ -201,6 +239,8 @@ int main(int argc, char** argv) {
   period[0] = 0;
   period[1] = 0;
   reorder = 1;
+
+  // TODO: Remove
   err = MPI_Cart_create(MCW, 2, dim, period, reorder, &MC1);
   err = MPI_Cart_shift(MC1, 0, 1, &x_rank_L, &x_rank_R);
   err = MPI_Cart_shift(MC1, 1, 1, &y_rank_F, &y_rank_B);
@@ -225,42 +265,44 @@ int main(int argc, char** argv) {
   if (y_rank_B < 0) {
     y_rank_B = -1;
   }
-  // Below line is only for HPGPU4 machine!
-  //    rank_gpu = rank%4;
-  // Below line is for 1 GPU/node systems
+
+  // Select GPU for 1 GPU per node systems
   rank_gpu = 0;
   cudaSetDevice(rank_gpu);
 
   printf("\n\nrank=%d) RS=%d, RSG=%d, NST=%d, IF=%d\n\n\n", rank, READ_STEP, READ_STEP_GPU, NST, IFAULT);
 
-  // same for each processor:
+  // Same for each processor:
   if (NEDX == -1) NEDX = NX;
   if (NEDY == -1) NEDY = NY;
   if (NEDZ == -1) NEDZ = NZ;
-  // make NED's a record point
-  // for instance if NBGX:NSKPX:NEDX = 1:3:9
-  // then we have 1,4,7 but NEDX=7 is better
+
+  // Make NED's a record point
+  // For instance if NBGX:NSKPX:NEDX = 1:3:9,
+  // then we have 1,4,7 but NEDX=7 is better.
   NEDX = NEDX - (NEDX - NBGX) % NSKPX;
   NEDY = NEDY - (NEDY - NBGY) % NSKPY;
   NEDZ = NEDZ - (NEDZ - NBGZ) % NSKPZ;
-  // number of recording points in total
+
+  // Number of recording points in total
   rec_NX = (NEDX - NBGX) / NSKPX + 1;
   rec_NY = (NEDY - NBGY) / NSKPY + 1;
   rec_NZ = (NEDZ - NBGZ) / NSKPZ + 1;
 
-  // specific to each processor:
+  // Specific to each processor:
   calcRecordingPoints(&rec_nbgx, &rec_nedx, &rec_nbgy, &rec_nedy, &rec_nbgz, &rec_nedz, &rec_nxt, &rec_nyt, &rec_nzt, &displacement, (long int)nxt, (long int)nyt, (long int)nzt, rec_NX, rec_NY, rec_NZ, NBGX, NEDX, NSKPX, NBGY, NEDY, NSKPY, NBGZ, NEDZ, NSKPZ, coord);
   printf("%d = (%d,%d)) NX,NY,NZ=%d,%d,%d\nnxt,nyt,nzt=%d,%d,%d\nrec_N=(%d,%d,%d)\nrec_nxt,=%d,%d,%d\nNBGX,SKP,END=(%d:%d:%d),(%d:%d:%d),(%d:%d:%d)\nrec_nbg,ed=(%d,%d),(%d,%d),(%d,%d)\ndisp=%ld\n", rank, coord[0], coord[1], NX, NY, NZ, nxt, nyt, nzt, rec_NX, rec_NY, rec_NZ, rec_nxt, rec_nyt, rec_nzt, NBGX, NSKPX, NEDX, NBGY, NSKPY, NEDY, NBGZ, NSKPZ, NEDZ, rec_nbgx, rec_nedx, rec_nbgy, rec_nedy, rec_nbgz, rec_nedz, (long int)displacement);
 
-  int maxNX_NY_NZ_WS = (rec_NX > rec_NY ? rec_NX : rec_NY);
-  maxNX_NY_NZ_WS = (maxNX_NY_NZ_WS > rec_NZ ? maxNX_NY_NZ_WS : rec_NZ);
-  maxNX_NY_NZ_WS = (maxNX_NY_NZ_WS > WRITE_STEP ? maxNX_NY_NZ_WS : WRITE_STEP);
+  int maxNX_NY_NZ_WS = std::max(rec_NX, rec_NY);
+  maxNX_NY_NZ_WS = std::max(maxNX_NY_NZ_WS, rec_NZ);
+  maxNX_NY_NZ_WS = std::max(maxNX_NY_NZ_WS, WRITE_STEP);
   int ones[maxNX_NY_NZ_WS];
   MPI_Aint dispArray[maxNX_NY_NZ_WS];
   for (i = 0; i < maxNX_NY_NZ_WS; ++i) {
     ones[i] = 1;
   }
 
+  // TODO: Remove
   err = MPI_Type_contiguous(rec_nxt, MPI_FLOAT, &filetype);
   err = MPI_Type_commit(&filetype);
   for (i = 0; i < rec_nyt; i++) {
@@ -280,27 +322,10 @@ int main(int argc, char** argv) {
     dispArray[i] = dispArray[i] * rec_NZ * rec_NY * rec_NX * i;
   }
   err = MPI_Type_create_hindexed(WRITE_STEP, ones, dispArray, filetype, &filetype);
-  // err = MPI_Type_contiguous(WRITE_STEP, filetype, &filetype);
   err = MPI_Type_commit(&filetype);
   MPI_Type_size(filetype, &tmpSize);
   if (rank == 0) printf("filetype size (supposedly=rec_nxt*nyt*nzt*WS*4=%d) =%d\n", rec_nxt * rec_nyt * rec_nzt * WRITE_STEP * 4, tmpSize);
 
-  /*
-      fmtype[0]  = WRITE_STEP;
-      //fmtype[1]  = NZ;
-      fmtype[1]  = NY;
-      fmtype[2]  = NX;
-      fptype[0]  = WRITE_STEP;
-      //fptype[1]  = nzt;
-      fptype[1]  = nyt;
-      fptype[2]  = nxt;
-      foffset[0] = 0;
-      //foffset[1] = 0;
-      foffset[1] = nyt*coord[1];
-      foffset[2] = nxt*coord[0];
-      err = MPI_Type_create_subarray(3, fmtype, fptype, foffset, MPI_ORDER_C, MPI_FLOAT, &filetype);
-      err = MPI_Type_commit(&filetype);
-  */
   printf("rank=%d, x_rank_L=%d, x_rank_R=%d, y_rank_F=%d, y_rank_B=%d\n", rank, x_rank_L, x_rank_R, y_rank_F, y_rank_B);
 
   if (x_rank_L < 0)
@@ -338,23 +363,23 @@ int main(int argc, char** argv) {
   ybs = nyt + 2;
   ybe = nyt + 4 * loop + 1;
 
-  if (rank == 0) printf("Before inisource\n");
-  err = inisource(rank, IFAULT, NSRC, READ_STEP, NST, &srcproc, NZ, MCW, nxt, nyt, nzt, coord, maxdim, &npsrc, &tpsrc, &taxx, &tayy, &tazz, &taxz, &tayz, &taxy, INSRC, INSRC_I2);
+  if (rank == 0) printf("Before initializeSource\n");
+  err = initializeSource(rank, IFAULT, NSRC, READ_STEP, NST, &srcproc, NZ, MCW, nxt, nyt, nzt, coord, maxdim, &npsrc, &tpsrc, &taxx, &tayy, &tazz, &taxz, &tayz, &taxy, INSRC, INSRC_I2);
   if (err) {
-    printf("source initialization failed\n");
+    printf("Source initialization failed\n");
     return -1;
   }
-  if (rank == 0) printf("After inisource\n");
+  if (rank == 0) printf("After initializeSource\n");
 
   if (rank == srcproc) {
     printf("rank=%d, source rank, npsrc=%d\n", rank, npsrc);
     num_bytes = sizeof(float) * npsrc * READ_STEP_GPU;
-    cudaMalloc((void**)&d_taxx, num_bytes);
-    cudaMalloc((void**)&d_tayy, num_bytes);
-    cudaMalloc((void**)&d_tazz, num_bytes);
-    cudaMalloc((void**)&d_taxz, num_bytes);
-    cudaMalloc((void**)&d_tayz, num_bytes);
-    cudaMalloc((void**)&d_taxy, num_bytes);
+    cudaMalloc(&d_taxx, num_bytes);
+    cudaMalloc(&d_tayy, num_bytes);
+    cudaMalloc(&d_tazz, num_bytes);
+    cudaMalloc(&d_taxz, num_bytes);
+    cudaMalloc(&d_tayz, num_bytes);
+    cudaMalloc(&d_taxy, num_bytes);
     cudaMemcpy(d_taxx, taxx, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_tayy, tayy, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_tazz, tazz, num_bytes, cudaMemcpyHostToDevice);
@@ -376,9 +401,9 @@ int main(int argc, char** argv) {
     qs = Alloc3D(nxt + 4 + 8 * loop, nyt + 4 + 8 * loop, nzt + 2 * align);
   }
 
-  if (rank == 0) printf("Before inimesh\n");
-  inimesh(MEDIASTART, d1, mu, lam, qp, qs, &taumax, &taumin, NVAR, FP, FL, FH, nxt, nyt, nzt, PX, PY, NX, NY, NZ, coord, MCW, IDYNA, NVE, SoCalQ, INVEL, vse, vpe, dde);
-  if (rank == 0) printf("After inimesh\n");
+  if (rank == 0) printf("Before initializeMesh\n");
+  initializeMesh(MEDIASTART, d1, mu, lam, qp, qs, &taumax, &taumin, NVAR, FP, FL, FH, nxt, nyt, nzt, PX, PY, NX, NY, NZ, coord, MCW, IDYNA, NVE, SoCalQ, INVEL, vse, vpe, dde);
+  if (rank == 0) printf("After initializeMesh\n");
   if (rank == 0)
     writeCHK(CHKFILE, NTISKP, DT, DH, nxt, nyt, nzt, nt, ARBC, NPC, NVE, FL, FH, FP, vse, vpe, dde);
 
@@ -452,8 +477,8 @@ int main(int argc, char** argv) {
   cudaMemcpy(d_vx2, &vx2[0][0][0], num_bytes, cudaMemcpyHostToDevice);
 
   cudaTextureObject_t d_vx1_tex, d_vx2_tex;
-  Create1DFloatTextureObject(&d_vx1_tex, d_vx1, num_bytes);
-  Create1DFloatTextureObject(&d_vx2_tex, d_vx2, num_bytes);
+  create1DFloatTextureObject(&d_vx1_tex, d_vx1, num_bytes);
+  create1DFloatTextureObject(&d_vx2_tex, d_vx2, num_bytes);
 
   if (NPC == 0) {
     num_bytes = sizeof(float) * (nxt + 4 + 8 * loop);
@@ -494,107 +519,117 @@ int main(int argc, char** argv) {
 
   if (rank == 0) printf("Allocate device velocity and stress pointers and copy.\n");
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc((void**)&d_u1, num_bytes);
+  cudaMalloc(&d_u1, num_bytes);
   cudaMemcpy(d_u1, &u1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_v1, num_bytes);
+  cudaMalloc(&d_v1, num_bytes);
   cudaMemcpy(d_v1, &v1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_w1, num_bytes);
+  cudaMalloc(&d_w1, num_bytes);
   cudaMemcpy(d_w1, &w1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_xx, num_bytes);
+  cudaMalloc(&d_xx, num_bytes);
   cudaMemcpy(d_xx, &xx[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_yy, num_bytes);
+  cudaMalloc(&d_yy, num_bytes);
   cudaMemcpy(d_yy, &yy[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_zz, num_bytes);
+  cudaMalloc(&d_zz, num_bytes);
   cudaMemcpy(d_zz, &zz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_xy, num_bytes);
+  cudaMalloc(&d_xy, num_bytes);
   cudaMemcpy(d_xy, &xy[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_xz, num_bytes);
+  cudaMalloc(&d_xz, num_bytes);
   cudaMemcpy(d_xz, &xz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_yz, num_bytes);
+  cudaMalloc(&d_yz, num_bytes);
   cudaMemcpy(d_yz, &yz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
+
   if (NVE == 1) {
     if (rank == 0) printf("Allocate additional device pointers (r) and copy.\n");
-    cudaMalloc((void**)&d_r1, num_bytes);
+    cudaMalloc(&d_r1, num_bytes);
     cudaMemcpy(d_r1, &r1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&d_r2, num_bytes);
+    cudaMalloc(&d_r2, num_bytes);
     cudaMemcpy(d_r2, &r2[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&d_r3, num_bytes);
+    cudaMalloc(&d_r3, num_bytes);
     cudaMemcpy(d_r3, &r3[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&d_r4, num_bytes);
+    cudaMalloc(&d_r4, num_bytes);
     cudaMemcpy(d_r4, &r4[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&d_r5, num_bytes);
+    cudaMalloc(&d_r5, num_bytes);
     cudaMemcpy(d_r5, &r5[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&d_r6, num_bytes);
+    cudaMalloc(&d_r6, num_bytes);
     cudaMemcpy(d_r6, &r6[0][0][0], num_bytes, cudaMemcpyHostToDevice);
   }
-  //  variable initialization ends
+
+  // Variable initialization ends
   if (rank == 0) printf("Allocate buffers of #elements: %d\n", rec_nxt * rec_nyt * rec_nzt * WRITE_STEP);
   Bufx = Alloc1D(rec_nxt * rec_nyt * rec_nzt * WRITE_STEP);
   Bufy = Alloc1D(rec_nxt * rec_nyt * rec_nzt * WRITE_STEP);
   Bufz = Alloc1D(rec_nxt * rec_nyt * rec_nzt * WRITE_STEP);
+
   num_bytes = sizeof(float) * 3 * (4 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMallocHost((void**)&SL_vel, num_bytes);
-  cudaMallocHost((void**)&SR_vel, num_bytes);
-  cudaMallocHost((void**)&RL_vel, num_bytes);
-  cudaMallocHost((void**)&RR_vel, num_bytes);
+  cudaMallocHost(&SL_vel, num_bytes);
+  cudaMallocHost(&SR_vel, num_bytes);
+  cudaMallocHost(&RL_vel, num_bytes);
+  cudaMallocHost(&RR_vel, num_bytes);
+
   num_bytes = sizeof(float) * 3 * (4 * loop) * (nxt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMallocHost((void**)&SF_vel, num_bytes);
-  cudaMallocHost((void**)&SB_vel, num_bytes);
-  cudaMallocHost((void**)&RF_vel, num_bytes);
-  cudaMallocHost((void**)&RB_vel, num_bytes);
+  cudaMallocHost(&SF_vel, num_bytes);
+  cudaMallocHost(&SB_vel, num_bytes);
+  cudaMallocHost(&RF_vel, num_bytes);
+  cudaMallocHost(&RB_vel, num_bytes);
+
   num_bytes = sizeof(float) * (4 * loop) * (nxt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc((void**)&d_f_u1, num_bytes);
-  cudaMalloc((void**)&d_f_v1, num_bytes);
-  cudaMalloc((void**)&d_f_w1, num_bytes);
-  cudaMalloc((void**)&d_b_u1, num_bytes);
-  cudaMalloc((void**)&d_b_v1, num_bytes);
-  cudaMalloc((void**)&d_b_w1, num_bytes);
+  cudaMalloc(&d_f_u1, num_bytes);
+  cudaMalloc(&d_f_v1, num_bytes);
+  cudaMalloc(&d_f_w1, num_bytes);
+  cudaMalloc(&d_b_u1, num_bytes);
+  cudaMalloc(&d_b_v1, num_bytes);
+  cudaMalloc(&d_b_w1, num_bytes);
+
   msg_v_size_x = 3 * (4 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
   msg_v_size_y = 3 * (4 * loop) * (nxt + 4 + 8 * loop) * (nzt + 2 * align);
-  SetDeviceConstValue(DH, DT, nxt, nyt, nzt);
+
+  setDeviceConstValue(DH, DT, nxt, nyt, nzt);
+
   cudaStreamCreate(&stream_1);
   cudaStreamCreate(&stream_2);
   cudaStreamCreate(&stream_i);
 
   if (rank == 0)
     fchk = fopen(CHKFILE, "a+");
-  //  Main Loop Starts
+
+  // Main loop starts
   if (NPC == 0 && NVE == 1) {
     time_un -= gethrtime();
+
     // This loop has no loverlapping because there is source input
     for (cur_step = 1; cur_step <= nt; cur_step++) {
       if (rank == 0) {
-        printf("Time Step =                   %ld    OF  Total Timesteps = %ld\n", cur_step, nt);
-        if (cur_step == 100 || cur_step % 1000 == 0)
+        if (cur_step % 100 == 0) {
+          printf("Time Step = %ld of Total Timesteps = %ld\n", cur_step, nt);
           printf("Time per timestep:\t%lf seconds\n", (gethrtime() + time_un) / cur_step);
+        }
       }
       cerr = cudaGetLastError();
       if (cerr != cudaSuccess) printf("CUDA ERROR! rank=%d before timestep: %s\n", rank, cudaGetErrorString(cerr));
-      // pre-post MPI Message
-      PostRecvMsg_Y(RF_vel, RB_vel, MCW, request_y, &count_y, msg_v_size_y, y_rank_F, y_rank_B);
-      PostRecvMsg_X(RL_vel, RR_vel, MCW, request_x, &count_x, msg_v_size_x, x_rank_L, x_rank_R);
-      // velocity computation in y boundary, two ghost cell regions
+
+      // Velocity computation in y boundary, two ghost cell regions
       dvelcy_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz, d_d1, nxt, nzt, d_f_u1, d_f_v1, d_f_w1, stream_i, yfs, yfe, y_rank_F);
       dvelcy_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz, d_d1, nxt, nzt, d_b_u1, d_b_v1, d_b_w1, stream_i, ybs, ybe, y_rank_B);
       Cpy2Host_VY(d_f_u1, d_f_v1, d_f_w1, SF_vel, nxt, nzt, stream_i, y_rank_F);
       Cpy2Host_VY(d_b_u1, d_b_v1, d_b_w1, SB_vel, nxt, nzt, stream_i, y_rank_B);
       cudaThreadSynchronize();
-      // velocity communication in y direction
-      PostSendMsg_Y(SF_vel, SB_vel, MCW, request_y, &count_y, msg_v_size_y, y_rank_F, y_rank_B, rank, Both);
-      MPI_Waitall(count_y, request_y, status_y);
+
+      // Velocity communication in y direction
       Cpy2Device_VY(d_u1, d_v1, d_w1, d_f_u1, d_f_v1, d_f_w1, d_b_u1, d_b_v1, d_b_w1, RF_vel, RB_vel, nxt, nyt, nzt, stream_i, stream_i, y_rank_F, y_rank_B);
-      // velocity computation whole 3D Grid (nxt, nyt, nzt)
+
+      // Velocity computation whole 3D Grid (nxt, nyt, nzt)
       dvelcx_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz, d_d1, nyt, nzt, stream_i, xvs, xve);
       Cpy2Host_VX(d_u1, d_v1, d_w1, SL_vel, nxt, nyt, nzt, stream_i, x_rank_L, Left);
       Cpy2Host_VX(d_u1, d_v1, d_w1, SR_vel, nxt, nyt, nzt, stream_i, x_rank_R, Right);
       cudaThreadSynchronize();
-      // velocity communication in x direction
-      PostSendMsg_X(SL_vel, SR_vel, MCW, request_x, &count_x, msg_v_size_x, x_rank_L, x_rank_R, rank, Both);
-      MPI_Waitall(count_x, request_x, status_x);
+
+      // Velocity communication in x direction
       Cpy2Device_VX(d_u1, d_v1, d_w1, RL_vel, RR_vel, nxt, nyt, nzt, stream_i, stream_i, x_rank_L, x_rank_R);
-      // stress computation whole 3D Grid (nxt+4, nyt+4, nzt)
+
+      // Stress computation whole 3D Grid (nxt+4, nyt+4, nzt)
       dstrqc_H(d_vx1_tex, d_vx2_tex, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_r1, d_r2, d_r3, d_r4, d_r5, d_r6, d_u1, d_v1, d_w1, d_lam, d_mu, d_qp, d_qs, d_dcrjx, d_dcrjy, d_dcrjz, nyt, nzt, stream_i, d_lam_mu, NX, coord[0], coord[1], xls, xre, yls, yre);
-      // update source input
+
+      // Update source input
       if (rank == srcproc && cur_step < NST) {
         ++source_step;
         addsrc_H(source_step, READ_STEP_GPU, maxdim, d_tpsrc, npsrc, stream_i, d_taxx, d_tayy, d_tazz, d_taxz, d_tayz, d_taxy, d_xx, d_yy, d_zz, d_xy, d_yz, d_xz);
@@ -618,26 +653,8 @@ int main(int argc, char** argv) {
               Bufz[tmpInd] = w1[i][j][k];
               tmpInd++;
             }
-        if ((cur_step / NTISKP) % WRITE_STEP == 0) {
-          cudaThreadSynchronize();
-          sprintf(filename, "%s%07ld", filenamebasex, cur_step);
-          err = MPI_File_open(MCW, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-          err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-          err = MPI_File_write_all(fh, Bufx, rec_nxt * rec_nyt * rec_nzt * WRITE_STEP, MPI_FLOAT, &filestatus);
-          err = MPI_File_close(&fh);
-          sprintf(filename, "%s%07ld", filenamebasey, cur_step);
-          err = MPI_File_open(MCW, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-          err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-          err = MPI_File_write_all(fh, Bufy, rec_nxt * rec_nyt * rec_nzt * WRITE_STEP, MPI_FLOAT, &filestatus);
-          err = MPI_File_close(&fh);
-          sprintf(filename, "%s%07ld", filenamebasez, cur_step);
-          err = MPI_File_open(MCW, filename, MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &fh);
-          err = MPI_File_set_view(fh, displacement, MPI_FLOAT, filetype, "native", MPI_INFO_NULL);
-          err = MPI_File_write_all(fh, Bufz, rec_nxt * rec_nyt * rec_nzt * WRITE_STEP, MPI_FLOAT, &filestatus);
-          err = MPI_File_close(&fh);
-        }
 
-        // write-statistics to chk file:
+        // Write-statistics to chk file:
         if (rank == 0) {
           i = ND + 2 + 4 * loop;
           j = i;
@@ -646,21 +663,10 @@ int main(int argc, char** argv) {
           fflush(fchk);
         }
       }
-
-      if ((cur_step < NST - 1) && (IFAULT == 2) && ((cur_step + 1) % READ_STEP_GPU == 0) && (rank == srcproc)) {
-        printf("%d) Read new source from CPU.\n", rank);
-        if ((cur_step + 1) % READ_STEP == 0) {
-          printf("%d) Read new source from file.\n", rank);
-          read_src_ifault_2(rank, READ_STEP, INSRC, INSRC_I2, maxdim, coord, NZ, nxt, nyt, nzt, &npsrc, &srcproc, &tpsrc, &taxx, &tayy, &tazz, &taxz, &tayz, &taxy, (cur_step + 1) / READ_STEP + 1);
-        }
-        printf("%d) SOURCE: taxx,xy,xz:%e,%e,%e\n", rank, taxx[cur_step % READ_STEP], taxy[cur_step % READ_STEP], taxz[cur_step % READ_STEP]);
-        // Synchronous copy!
-        Cpy2Device_source(npsrc, READ_STEP_GPU, ((cur_step + 1) % READ_STEP), taxx, tayy, tazz, taxz, tayz, taxy, d_taxx, d_tayy, d_tazz, d_taxz, d_tayz, d_taxy);
-        source_step = 0;
-      }
     }
     time_un += gethrtime();
   }
+
   if (rank == 0) {
     fprintf(fchk, "END\n");
     fclose(fchk);
@@ -677,19 +683,16 @@ int main(int argc, char** argv) {
   cudaFreeHost(SB_vel);
   cudaFreeHost(RF_vel);
   cudaFreeHost(RB_vel);
-  GFLOPS = 1.0;
+
+  float GFLOPS = 1.0;
   GFLOPS = GFLOPS * 307.0 * (xre - xls) * (yre - yls) * nzt;
   GFLOPS = GFLOPS / (1000 * 1000 * 1000);
   time_un = time_un / cur_step;
   GFLOPS = GFLOPS / time_un;
-  MPI_Allreduce(&GFLOPS, &GFLOPS_SUM, 1, MPI_DOUBLE, MPI_SUM, MCW);
-  if (rank == 0) {
-    printf("GPU benchmark size NX=%d, NY=%d, NZ=%d, ReadStep=%d\n", NX, NY, NZ, READ_STEP);
-    printf("GPU computing flops=%1.18f GFLOPS, time = %1.18f secs per timestep\n", GFLOPS_SUM, time_un);
-  }
-  //  Main Loop Ends
+  printf("GPU benchmark size NX=%d, NY=%d, NZ=%d, ReadStep=%d\n", NX, NY, NZ, READ_STEP);
+  printf("GPU computing flops = %1.6f GFLOPS, time = %1.6f secs per timestep\n", GFLOPS, time_un);
 
-  //  program ends, free all memories
+  // Clean up
   cudaDestroyTextureObject(d_vx1_tex);
   cudaDestroyTextureObject(d_vx2_tex);
   Delloc3D(u1);
@@ -777,67 +780,8 @@ int main(int argc, char** argv) {
     cudaFree(d_tpsrc);
   }
 
+  // TODO: Remove
   MPI_Comm_free(&MC1);
   MPI_Finalize();
-  return (0);
-}
-
-// Calculates recording points for each core
-// rec_nbgxyz rec_nedxyz...
-// WARNING: Assumes NPZ = 1! Only surface outputs are needed!
-void calcRecordingPoints(int* rec_nbgx, int* rec_nedx, int* rec_nbgy, int* rec_nedy, int* rec_nbgz, int* rec_nedz, int* rec_nxt, int* rec_nyt, int* rec_nzt, MPI_Offset* displacement, long int nxt, long int nyt, long int nzt, int rec_NX, int rec_NY, int rec_NZ, int NBGX, int NEDX, int NSKPX, int NBGY, int NEDY, int NSKPY, int NBGZ, int NEDZ, int NSKPZ, int* coord) {
-  *displacement = 0;
-
-  if (NBGX > nxt * (coord[0] + 1))
-    *rec_nxt = 0;
-  else if (NEDX < nxt * coord[0] + 1)
-    *rec_nxt = 0;
-  else {
-    if (nxt * coord[0] >= NBGX) {
-      *rec_nbgx = (nxt * coord[0] + NBGX - 1) % NSKPX;
-      *displacement += (nxt * coord[0] - NBGX) / NSKPX + 1;
-    } else
-      *rec_nbgx = NBGX - nxt * coord[0] - 1;  // since rec_nbgx is 0-based
-    if (nxt * (coord[0] + 1) <= NEDX)
-      *rec_nedx = (nxt * (coord[0] + 1) + NBGX - 1) % NSKPX - NSKPX + nxt;
-    else
-      *rec_nedx = NEDX - nxt * coord[0] - 1;
-    *rec_nxt = (*rec_nedx - *rec_nbgx) / NSKPX + 1;
-  }
-
-  if (NBGY > nyt * (coord[1] + 1))
-    *rec_nyt = 0;
-  else if (NEDY < nyt * coord[1] + 1)
-    *rec_nyt = 0;
-  else {
-    if (nyt * coord[1] >= NBGY) {
-      *rec_nbgy = (nyt * coord[1] + NBGY - 1) % NSKPY;
-      *displacement += ((nyt * coord[1] - NBGY) / NSKPY + 1) * rec_NX;
-    } else
-      *rec_nbgy = NBGY - nyt * coord[1] - 1;  // since rec_nbgy is 0-based
-    if (nyt * (coord[1] + 1) <= NEDY)
-      *rec_nedy = (nyt * (coord[1] + 1) + NBGY - 1) % NSKPY - NSKPY + nyt;
-    else
-      *rec_nedy = NEDY - nyt * coord[1] - 1;
-    *rec_nyt = (*rec_nedy - *rec_nbgy) / NSKPY + 1;
-  }
-
-  if (NBGZ > nzt)
-    *rec_nzt = 0;
-  else {
-    *rec_nbgz = NBGZ - 1;  // since rec_nbgz is 0-based
-    *rec_nedz = NEDZ - 1;
-    *rec_nzt = (*rec_nedz - *rec_nbgz) / NSKPZ + 1;
-  }
-
-  if (*rec_nxt == 0 || *rec_nyt == 0 || *rec_nzt == 0) {
-    *rec_nxt = 0;
-    *rec_nyt = 0;
-    *rec_nzt = 0;
-  }
-
-  // displacement assumes NPZ=1!
-  *displacement *= sizeof(float);
-
-  return;
+  return 0;
 }

@@ -17,7 +17,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include "pmcl3d.h"
 
-void inimesh(int MEDIASTART, Grid3D d1, Grid3D mu, Grid3D lam, Grid3D qp, Grid3D qs, float *taumax, float *taumin, int nvar, float FP, float FL, float FH, int nxt, int nyt, int nzt, int PX, int PY, int NX, int NY, int NZ, int *coords, MPI_Comm MCW, int IDYNA, int NVE, int SoCalQ, char *INVEL, float *vse, float *vpe, float *dde) {
+void initializeMesh(int MEDIASTART, Grid3D d1, Grid3D mu, Grid3D lam, Grid3D qp, Grid3D qs, float *taumax, float *taumin, int nvar, float FP, float FL, float FH, int nxt, int nyt, int nzt, int PX, int PY, int NX, int NY, int NZ, int *coords, MPI_Comm MCW, int IDYNA, int NVE, int SoCalQ, char *INVEL, float *vse, float *vpe, float *dde) {
   int merr;
   int rank;
   int i, j, k, err;
