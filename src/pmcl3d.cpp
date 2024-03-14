@@ -387,7 +387,7 @@ int main(int argc, char** argv) {
     cudaMemcpy(d_tayz, tayz, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_taxy, taxy, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(int) * npsrc * maxdim;
-    cudaMalloc((void**)&d_tpsrc, num_bytes);
+    cudaMalloc(&d_tpsrc, num_bytes);
     cudaMemcpy(d_tpsrc, tpsrc, num_bytes, cudaMemcpyHostToDevice);
   }
 
@@ -418,7 +418,7 @@ int main(int argc, char** argv) {
     }
 
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop);
-  cudaMalloc((void**)&d_lam_mu, num_bytes);
+  cudaMalloc(&d_lam_mu, num_bytes);
   cudaMemcpy(d_lam_mu, &lam_mu[0][0][0], num_bytes, cudaMemcpyHostToDevice);
 
   vx1 = Alloc3D(nxt + 4 + 8 * loop, nyt + 4 + 8 * loop, nzt + 2 * align);
@@ -461,19 +461,19 @@ int main(int argc, char** argv) {
 
   if (rank == 0) printf("Allocate device media pointers and copy.\n");
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc((void**)&d_d1, num_bytes);
+  cudaMalloc(&d_d1, num_bytes);
   cudaMemcpy(d_d1, &d1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_lam, num_bytes);
+  cudaMalloc(&d_lam, num_bytes);
   cudaMemcpy(d_lam, &lam[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_mu, num_bytes);
+  cudaMalloc(&d_mu, num_bytes);
   cudaMemcpy(d_mu, &mu[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_qp, num_bytes);
+  cudaMalloc(&d_qp, num_bytes);
   cudaMemcpy(d_qp, &qp[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_qs, num_bytes);
+  cudaMalloc(&d_qs, num_bytes);
   cudaMemcpy(d_qs, &qs[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_vx1, num_bytes);
+  cudaMalloc(&d_vx1, num_bytes);
   cudaMemcpy(d_vx1, &vx1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc((void**)&d_vx2, num_bytes);
+  cudaMalloc(&d_vx2, num_bytes);
   cudaMemcpy(d_vx2, &vx2[0][0][0], num_bytes, cudaMemcpyHostToDevice);
 
   cudaTextureObject_t d_vx1_tex, d_vx2_tex;
@@ -482,13 +482,13 @@ int main(int argc, char** argv) {
 
   if (NPC == 0) {
     num_bytes = sizeof(float) * (nxt + 4 + 8 * loop);
-    cudaMalloc((void**)&d_dcrjx, num_bytes);
+    cudaMalloc(&d_dcrjx, num_bytes);
     cudaMemcpy(d_dcrjx, dcrjx, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(float) * (nyt + 4 + 8 * loop);
-    cudaMalloc((void**)&d_dcrjy, num_bytes);
+    cudaMalloc(&d_dcrjy, num_bytes);
     cudaMemcpy(d_dcrjy, dcrjy, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(float) * (nzt + 2 * align);
-    cudaMalloc((void**)&d_dcrjz, num_bytes);
+    cudaMalloc(&d_dcrjz, num_bytes);
     cudaMemcpy(d_dcrjz, dcrjz, num_bytes, cudaMemcpyHostToDevice);
   }
 
