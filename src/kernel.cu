@@ -17,6 +17,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include "kernel.h"
 #include "pmcl3d_cons.h"
+#include "preflight.hpp"
 
 __constant__ float d_c1;
 __constant__ float d_c2;
@@ -83,6 +84,7 @@ void dvelcx_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, 
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nyt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dvelcx, cudaFuncCachePreferL1);
+  preflight::registerKernel({u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d_1});
   dvelcx<<<grid, block, 0, St>>>(u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d_1, s_i, e_i);
   return;
 }
@@ -92,6 +94,7 @@ void dvelcy_H(float* u1, float* v1, float* w1, float* xx, float* yy, float* zz, 
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nxt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dvelcy, cudaFuncCachePreferL1);
+  preflight::registerKernel({u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d_1, s_u1, s_v1, s_w1});
   dvelcy<<<grid, block, 0, St>>>(u1, v1, w1, xx, yy, zz, xy, xz, yz, dcrjx, dcrjy, dcrjz, d_1, s_u1, s_v1, s_w1, s_j, e_j);
   return;
 }
@@ -101,7 +104,9 @@ void update_bound_y_H(float* u1, float* v1, float* w1, float* f_u1, float* f_v1,
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (nxt + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(update_boundary_y, cudaFuncCachePreferL1);
+  preflight::registerKernel({u1, v1, w1, f_u1, f_v1, f_w1});
   update_boundary_y<<<grid, block, 0, St1>>>(u1, v1, w1, f_u1, f_v1, f_w1, rank_f, Front);
+  preflight::registerKernel({u1, v1, w1, b_u1, b_v1, b_w1});
   update_boundary_y<<<grid, block, 0, St2>>>(u1, v1, w1, b_u1, b_v1, b_w1, rank_b, Back);
   return;
 }
@@ -110,6 +115,7 @@ void dstrqc_H(cudaTextureObject_t vx1_tex, cudaTextureObject_t vx2_tex, float* x
   dim3 block(BLOCK_SIZE_Z, BLOCK_SIZE_Y, 1);
   dim3 grid((nzt + BLOCK_SIZE_Z - 1) / BLOCK_SIZE_Z, (e_j - s_j + 1 + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y, 1);
   cudaFuncSetCacheConfig(dstrqc, cudaFuncCachePreferL1);
+  preflight::registerKernel({xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, u1, v1, w1, lam, mu, qp, qs, dcrjx, dcrjy, dcrjz, lam_mu});
   dstrqc<<<grid, block, 0, St>>>(vx1_tex, vx2_tex, xx, yy, zz, xy, xz, yz, r1, r2, r3, r4, r5, r6, u1, v1, w1, lam, mu, qp, qs, dcrjx, dcrjy, dcrjz, lam_mu, NX, rankx, ranky, s_i, e_i, s_j);
   return;
 }
@@ -126,6 +132,7 @@ void addsrc_H(int i, int READ_STEP, int dim, int* psrc, int npsrc, cudaStream_t 
   cudaError_t cerr;
   cerr = cudaGetLastError();
   if (cerr != cudaSuccess) printf("CUDA ERROR: addsrc before kernel: %s\n", cudaGetErrorString(cerr));
+  preflight::registerKernel({psrc, axx, ayy, azz, axz, ayz, axy, xx, yy, zz, xy, yz, xz});
   addsrc_cu<<<grid, block, 0, St>>>(i, READ_STEP, dim, psrc, npsrc, axx, ayy, azz, axz, ayz, axy, xx, yy, zz, xy, yz, xz);
   cerr = cudaGetLastError();
   if (cerr != cudaSuccess) printf("CUDA ERROR: addsrc after kernel: %s\n", cudaGetErrorString(cerr));

@@ -23,6 +23,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <unistd.h>
 
 #include "kernel.h"
+#include "preflight.hpp"
 
 constexpr double MICRO_SECOND = 1.0e-6;
 
@@ -374,12 +375,12 @@ int main(int argc, char** argv) {
   if (rank == srcproc) {
     printf("rank=%d, source rank, npsrc=%d\n", rank, npsrc);
     num_bytes = sizeof(float) * npsrc * READ_STEP_GPU;
-    cudaMalloc(&d_taxx, num_bytes);
-    cudaMalloc(&d_tayy, num_bytes);
-    cudaMalloc(&d_tazz, num_bytes);
-    cudaMalloc(&d_taxz, num_bytes);
-    cudaMalloc(&d_tayz, num_bytes);
-    cudaMalloc(&d_taxy, num_bytes);
+    preflight::wrappedCudaMalloc(&d_taxx, num_bytes);
+    preflight::wrappedCudaMalloc(&d_tayy, num_bytes);
+    preflight::wrappedCudaMalloc(&d_tazz, num_bytes);
+    preflight::wrappedCudaMalloc(&d_taxz, num_bytes);
+    preflight::wrappedCudaMalloc(&d_tayz, num_bytes);
+    preflight::wrappedCudaMalloc(&d_taxy, num_bytes);
     cudaMemcpy(d_taxx, taxx, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_tayy, tayy, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_tazz, tazz, num_bytes, cudaMemcpyHostToDevice);
@@ -387,7 +388,7 @@ int main(int argc, char** argv) {
     cudaMemcpy(d_tayz, tayz, num_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_taxy, taxy, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(int) * npsrc * maxdim;
-    cudaMalloc(&d_tpsrc, num_bytes);
+    preflight::wrappedCudaMalloc(&d_tpsrc, num_bytes);
     cudaMemcpy(d_tpsrc, tpsrc, num_bytes, cudaMemcpyHostToDevice);
   }
 
@@ -418,7 +419,7 @@ int main(int argc, char** argv) {
     }
 
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop);
-  cudaMalloc(&d_lam_mu, num_bytes);
+  preflight::wrappedCudaMalloc(&d_lam_mu, num_bytes);
   cudaMemcpy(d_lam_mu, &lam_mu[0][0][0], num_bytes, cudaMemcpyHostToDevice);
 
   vx1 = Alloc3D(nxt + 4 + 8 * loop, nyt + 4 + 8 * loop, nzt + 2 * align);
@@ -461,16 +462,18 @@ int main(int argc, char** argv) {
 
   if (rank == 0) printf("Allocate device media pointers and copy.\n");
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc(&d_d1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_d1, num_bytes);
   cudaMemcpy(d_d1, &d1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_lam, num_bytes);
+  preflight::wrappedCudaMalloc(&d_lam, num_bytes);
   cudaMemcpy(d_lam, &lam[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_mu, num_bytes);
+  preflight::wrappedCudaMalloc(&d_mu, num_bytes);
   cudaMemcpy(d_mu, &mu[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_qp, num_bytes);
+  preflight::wrappedCudaMalloc(&d_qp, num_bytes);
   cudaMemcpy(d_qp, &qp[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_qs, num_bytes);
+  preflight::wrappedCudaMalloc(&d_qs, num_bytes);
   cudaMemcpy(d_qs, &qs[0][0][0], num_bytes, cudaMemcpyHostToDevice);
+
+  // Texture object is not included in optimization and also preflight
   cudaMalloc(&d_vx1, num_bytes);
   cudaMemcpy(d_vx1, &vx1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
   cudaMalloc(&d_vx2, num_bytes);
@@ -482,13 +485,13 @@ int main(int argc, char** argv) {
 
   if (NPC == 0) {
     num_bytes = sizeof(float) * (nxt + 4 + 8 * loop);
-    cudaMalloc(&d_dcrjx, num_bytes);
+    preflight::wrappedCudaMalloc(&d_dcrjx, num_bytes);
     cudaMemcpy(d_dcrjx, dcrjx, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(float) * (nyt + 4 + 8 * loop);
-    cudaMalloc(&d_dcrjy, num_bytes);
+    preflight::wrappedCudaMalloc(&d_dcrjy, num_bytes);
     cudaMemcpy(d_dcrjy, dcrjy, num_bytes, cudaMemcpyHostToDevice);
     num_bytes = sizeof(float) * (nzt + 2 * align);
-    cudaMalloc(&d_dcrjz, num_bytes);
+    preflight::wrappedCudaMalloc(&d_dcrjz, num_bytes);
     cudaMemcpy(d_dcrjz, dcrjz, num_bytes, cudaMemcpyHostToDevice);
   }
 
@@ -519,38 +522,38 @@ int main(int argc, char** argv) {
 
   if (rank == 0) printf("Allocate device velocity and stress pointers and copy.\n");
   num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc(&d_u1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_u1, num_bytes);
   cudaMemcpy(d_u1, &u1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_v1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_v1, num_bytes);
   cudaMemcpy(d_v1, &v1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_w1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_w1, num_bytes);
   cudaMemcpy(d_w1, &w1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_xx, num_bytes);
+  preflight::wrappedCudaMalloc(&d_xx, num_bytes);
   cudaMemcpy(d_xx, &xx[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_yy, num_bytes);
+  preflight::wrappedCudaMalloc(&d_yy, num_bytes);
   cudaMemcpy(d_yy, &yy[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_zz, num_bytes);
+  preflight::wrappedCudaMalloc(&d_zz, num_bytes);
   cudaMemcpy(d_zz, &zz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_xy, num_bytes);
+  preflight::wrappedCudaMalloc(&d_xy, num_bytes);
   cudaMemcpy(d_xy, &xy[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_xz, num_bytes);
+  preflight::wrappedCudaMalloc(&d_xz, num_bytes);
   cudaMemcpy(d_xz, &xz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-  cudaMalloc(&d_yz, num_bytes);
+  preflight::wrappedCudaMalloc(&d_yz, num_bytes);
   cudaMemcpy(d_yz, &yz[0][0][0], num_bytes, cudaMemcpyHostToDevice);
 
   if (NVE == 1) {
     if (rank == 0) printf("Allocate additional device pointers (r) and copy.\n");
-    cudaMalloc(&d_r1, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r1, num_bytes);
     cudaMemcpy(d_r1, &r1[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_r2, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r2, num_bytes);
     cudaMemcpy(d_r2, &r2[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_r3, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r3, num_bytes);
     cudaMemcpy(d_r3, &r3[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_r4, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r4, num_bytes);
     cudaMemcpy(d_r4, &r4[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_r5, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r5, num_bytes);
     cudaMemcpy(d_r5, &r5[0][0][0], num_bytes, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_r6, num_bytes);
+    preflight::wrappedCudaMalloc(&d_r6, num_bytes);
     cudaMemcpy(d_r6, &r6[0][0][0], num_bytes, cudaMemcpyHostToDevice);
   }
 
@@ -573,12 +576,12 @@ int main(int argc, char** argv) {
   cudaMallocHost(&RB_vel, num_bytes);
 
   num_bytes = sizeof(float) * (4 * loop) * (nxt + 4 + 8 * loop) * (nzt + 2 * align);
-  cudaMalloc(&d_f_u1, num_bytes);
-  cudaMalloc(&d_f_v1, num_bytes);
-  cudaMalloc(&d_f_w1, num_bytes);
-  cudaMalloc(&d_b_u1, num_bytes);
-  cudaMalloc(&d_b_v1, num_bytes);
-  cudaMalloc(&d_b_w1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_f_u1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_f_v1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_f_w1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_b_u1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_b_v1, num_bytes);
+  preflight::wrappedCudaMalloc(&d_b_w1, num_bytes);
 
   msg_v_size_x = 3 * (4 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
   msg_v_size_y = 3 * (4 * loop) * (nxt + 4 + 8 * loop) * (nzt + 2 * align);
@@ -612,7 +615,7 @@ int main(int argc, char** argv) {
       dvelcy_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz, d_d1, nxt, nzt, d_b_u1, d_b_v1, d_b_w1, stream_i, ybs, ybe, y_rank_B);
       Cpy2Host_VY(d_f_u1, d_f_v1, d_f_w1, SF_vel, nxt, nzt, stream_i, y_rank_F);
       Cpy2Host_VY(d_b_u1, d_b_v1, d_b_w1, SB_vel, nxt, nzt, stream_i, y_rank_B);
-      cudaThreadSynchronize();
+      cudaDeviceSynchronize();
 
       // Velocity communication in y direction
       Cpy2Device_VY(d_u1, d_v1, d_w1, d_f_u1, d_f_v1, d_f_w1, d_b_u1, d_b_v1, d_b_w1, RF_vel, RB_vel, nxt, nyt, nzt, stream_i, stream_i, y_rank_F, y_rank_B);
@@ -621,7 +624,7 @@ int main(int argc, char** argv) {
       dvelcx_H(d_u1, d_v1, d_w1, d_xx, d_yy, d_zz, d_xy, d_xz, d_yz, d_dcrjx, d_dcrjy, d_dcrjz, d_d1, nyt, nzt, stream_i, xvs, xve);
       Cpy2Host_VX(d_u1, d_v1, d_w1, SL_vel, nxt, nyt, nzt, stream_i, x_rank_L, Left);
       Cpy2Host_VX(d_u1, d_v1, d_w1, SR_vel, nxt, nyt, nzt, stream_i, x_rank_R, Right);
-      cudaThreadSynchronize();
+      cudaDeviceSynchronize();
 
       // Velocity communication in x direction
       Cpy2Device_VX(d_u1, d_v1, d_w1, RL_vel, RR_vel, nxt, nyt, nzt, stream_i, stream_i, x_rank_L, x_rank_R);
@@ -634,7 +637,7 @@ int main(int argc, char** argv) {
         ++source_step;
         addsrc_H(source_step, READ_STEP_GPU, maxdim, d_tpsrc, npsrc, stream_i, d_taxx, d_tayy, d_tazz, d_taxz, d_tayz, d_taxy, d_xx, d_yy, d_zz, d_xy, d_yz, d_xz);
       }
-      cudaThreadSynchronize();
+      cudaDeviceSynchronize();
 
       if (cur_step % NTISKP == 0) {
         num_bytes = sizeof(float) * (nxt + 4 + 8 * loop) * (nyt + 4 + 8 * loop) * (nzt + 2 * align);
@@ -691,6 +694,8 @@ int main(int argc, char** argv) {
   GFLOPS = GFLOPS / time_un;
   printf("GPU benchmark size NX=%d, NY=%d, NZ=%d, ReadStep=%d\n", NX, NY, NZ, READ_STEP);
   printf("GPU computing flops = %1.6f GFLOPS, time = %1.6f secs per timestep\n", GFLOPS, time_un);
+
+  preflight::printResult();
 
   // Clean up
   cudaDestroyTextureObject(d_vx1_tex);

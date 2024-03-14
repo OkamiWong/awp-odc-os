@@ -27,8 +27,8 @@
 CUDA_HOME = $(subst bin/nvcc,,$(shell which nvcc))
 
 CC 	= mpicxx
-CFLAGS	= -O3 -g
-GFLAGS	= $(CUDA_HOME)bin/nvcc -use_fast_math -arch=sm_80
+CFLAGS	= -O3 -g -std=c++17
+GFLAGS	= $(CUDA_HOME)bin/nvcc -use_fast_math -arch=sm_80 -std=c++17
 
 INCDIR  = -I$(CUDA_HOME)include
 OBJECTS	= command.o pmcl3d.o grid.o source.o mesh.o cerjan.o swap.o kernel.o io.o
